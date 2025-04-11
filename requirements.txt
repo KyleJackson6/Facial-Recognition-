@@ -1,6 +1,4 @@
 fastapi
-numpy
-dlib
-pydantic
 uvicorn
-CMake
+opencv-python
+numpy
