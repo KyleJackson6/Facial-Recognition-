@@ -16,6 +16,9 @@ face_cascade = cv2.CascadeClassifier(cascade_path)
 
 @app.get("/camera_face_detection/")
 async def camera_face_detection():
+    if os.getenv("DISABLE_CAMERA", "true").lower() == "true":
+        return {"error": "Camera access is disabled on the server."}
+
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         return {"error": "Camera not accessible"}
