@@ -5,6 +5,10 @@ import os
 
 app = FastAPI()
 
+@app.get("/")
+def read_root():
+    return {"message": "Hello from FastAPI on Cloud Run!"}
+
 #Loading Haar Cascade for face detection
 current_dir = os.path.dirname(os.path.abspath(__file__))
 cascade_path = os.path.join(current_dir, 'models', 'haarcascade_frontalface_default.xml')
