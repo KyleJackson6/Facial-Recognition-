@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Facial Recognition App</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <h2>Upload an image for facial recognition</h2>
+  <form action="/process_image/" method="post" enctype="multipart/form-data">
+    <input type="file" name="file" required>
+
+    <label><input type="checkbox" name="use_harris"> Harris Corner Detection</label>
+    <label><input type="checkbox" name="use_shi_tomasi"> Shi-Tomasi Corner Detection</label>
+    <label><input type="checkbox" name="use_fast"> FAST Feature Detection</label>
+    <label><input type="checkbox" name="use_orb"> ORB Feature Detection</label>
+    <label><input type="checkbox" name="detect_faces"> Face Detection</label>
+
+    <button type="submit">Process</button>
+  </form>
+
+  {% if result %}
+    <h3>Processed Image:</h3>
+    <img src="data:image/png;base64,{{ result }}" alt="Processed Image">
+  {% endif %}
+</body>
+</html>

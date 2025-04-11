@@ -1,18 +1,26 @@
-from fastapi import FastAPI, UploadFile, File, Form, Response
+from fastapi import FastAPI, UploadFile, File, Form, Request
+from fastapi.responses import HTMLResponse, Response
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 import cv2
 import numpy as np
 import os
+import base64
 
 app = FastAPI()
 
-@app.get("/")
-def read_root():
-    return {"message": "Hello from FastAPI on Cloud Run!"}
+# Setup template rendering
+templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
-#Loading Haar Cascade for face detection
+# Load Haar cascade
 current_dir = os.path.dirname(os.path.abspath(__file__))
 cascade_path = os.path.join(current_dir, 'models', 'haarcascade_frontalface_default.xml')
 face_cascade = cv2.CascadeClassifier(cascade_path)
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/camera_face_detection/")
 async def camera_face_detection():
@@ -42,8 +50,9 @@ async def camera_face_detection():
     cap.release()
     return Response(content=img_bytes, media_type="image/png")
 
-@app.post("/process_image/")
-async def process_image(
+@app.post("/process_image/", response_class=HTMLResponse)
+async def process_image_ui(
+    request: Request,
     file: UploadFile = File(...),
     use_harris: bool = Form(False),
     use_shi_tomasi: bool = Form(False),
@@ -54,46 +63,41 @@ async def process_image(
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
     image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
     if image is None:
-        return {"error": "Invalid image format"}
+        return templates.TemplateResponse("index.html", {"request": request, "result": None})
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     if use_harris:
-        harris_block_size = 2
-        harris_ksize = 3
-        harris_k = 0.04
-        harris_dst = cv2.cornerHarris(gray, harris_block_size, harris_ksize, harris_k)
+        harris_dst = cv2.cornerHarris(gray, 2, 3, 0.04)
         harris_dst = cv2.dilate(harris_dst, None)
-        image[harris_dst > 0.01 * harris_dst.max()] = [0, 0, 255]  #Red dots
+        image[harris_dst > 0.01 * harris_dst.max()] = [0, 0, 255]
 
     if use_shi_tomasi:
-        max_corners = 100
-        quality_level = 0.01
-        min_distance = 10
-        corners = cv2.goodFeaturesToTrack(gray, max_corners, quality_level, min_distance)
+        corners = cv2.goodFeaturesToTrack(gray, 100, 0.01, 10)
         if corners is not None:
             corners = np.intp(corners)
             for corner in corners:
                 x, y = corner.ravel()
-                cv2.circle(image, (x, y), 4, (0, 255, 0), -1)  #Green circles
+                cv2.circle(image, (x, y), 4, (0, 255, 0), -1)
 
     if use_fast:
-        fast_threshold = 25
-        fast = cv2.FastFeatureDetector_create(threshold=fast_threshold)
+        fast = cv2.FastFeatureDetector_create(threshold=25)
         keypoints = fast.detect(gray, None)
-        image = cv2.drawKeypoints(image, keypoints, None, color=(255, 255, 0))  #Yellow dots
+        image = cv2.drawKeypoints(image, keypoints, None, color=(255, 255, 0))
 
     if use_orb:
-        orb_nfeatures = 500
-        orb = cv2.ORB_create(nfeatures=orb_nfeatures)
+        orb = cv2.ORB_create(nfeatures=500)
         keypoints, descriptors = orb.detectAndCompute(gray, None)
-        image = cv2.drawKeypoints(image, keypoints, None, color=(255, 0, 255))  #Pink dots
+        image = cv2.drawKeypoints(image, keypoints, None, color=(255, 0, 255))
 
     if detect_faces:
         faces = face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5)
         for (x, y, w, h) in faces:
-            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 3)  #Red rectangle
+            cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 3)
 
     _, img_encoded = cv2.imencode('.png', image)
-    return Response(content=img_encoded.tobytes(), media_type="image/png")
+    img_base64 = base64.b64encode(img_encoded).decode('utf-8')
+
+    return templates.TemplateResponse("index.html", {"request": request, "result": img_base64})
